@@ -2,110 +2,140 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebAR - 3D交互平台</title>
-    
-    <!-- 核心库引入 -->
+    <title>AI 交互 AR 平台</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
 
     <style>
-      body { margin: 0; overflow: hidden; }
+      body { margin: 0; overflow: hidden; font-family: sans-serif; }
       .a-enter-vr { display: none; }
 
-      /* UI 界面 */
-      #ui-panel {
-        position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-        z-index: 1000; display: none; text-align: center;
+      /* 对话 UI */
+      #gui {
+        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+        z-index: 1000; text-align: center; width: 80%; display: none;
       }
-
-      .btn {
-        padding: 15px 30px; background: #ffffff; border: none;
-        border-radius: 50px; font-weight: bold; cursor: pointer;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4); font-size: 16px;
+      #status-text {
+        color: white; background: rgba(0,0,0,0.6); padding: 5px 15px;
+        border-radius: 10px; margin-bottom: 10px; font-size: 14px;
       }
+      .mic-btn {
+        width: 70px; height: 70px; border-radius: 50%; border: none;
+        background: #007AFF; color: white; font-size: 24px; cursor: pointer;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      }
+      .mic-btn.active { background: #FF3B30; animation: pulse 1.2s infinite; }
+      @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
     </style>
   </head>
   
   <body>
-    <!-- 语音按钮 -->
-    <div id="ui-panel">
-      <button id="voice-btn" class="btn">👋 点击跟我说话</button>
+    <div id="gui">
+      <div id="status-text">扫描成功！按住按钮跟我说话</div>
+      <button id="mic-btn" class="mic-btn">🎤</button>
     </div>
 
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.1; warmupTolerance: 7; missTolerance: 50" 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.1; missTolerance: 50" 
       color-space="sRGB" 
       renderer="colorManagement: true, physicallyCorrectLights" 
-      vr-mode-ui="enabled: false" 
+      vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
       gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
       cursor="rayOrigin: mouse" 
       raycaster="objects: .clickable">
 
       <a-assets>
-        <!-- 使用本地相对路径加载模型 -->
         <a-asset-item id="avatarModel" src="./my_model.glb"></a-asset-item>
       </a-assets>
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- 扫描目标：对应 targets.mind 中的第一个图 -->
-      <a-entity id="targetEntity" mindar-image-target="targetIndex: 0">
-        
+      <a-entity id="target" mindar-image-target="targetIndex: 0">
         <a-gltf-model 
           id="character"
           class="clickable"
           src="#avatarModel" 
           position="0 0 0" 
           rotation="0 0 0" 
-          scale="1.5 1.5 1.5"
+          scale="1.2 1.2 1.2"
           animation-mixer="clip: *; loop: repeat"
-          animation="property: rotation; to: 0 360 0; dur: 12000; easing: linear; loop: true">
-          <!-- 这里 scale="2 2 2" 让模型变大一倍，dur: 12000 让旋转更平滑 -->
+          animation="property: rotation; to: 0 360 0; dur: 15000; easing: linear; loop: true">
         </a-gltf-model>
-
       </a-entity>
 
-      <!-- 补光灯 -->
-      <a-light type="ambient" intensity="1.0"></a-light>
-      <a-light type="directional" position="0 2 2" intensity="0.5"></a-light>
+      <a-light type="ambient" intensity="1"></a-light>
     </a-scene>
 
     <script>
       const character = document.querySelector('#character');
-      const uiPanel = document.querySelector('#ui-panel');
-      const voiceBtn = document.querySelector('#voice-btn');
-      const targetEntity = document.querySelector('#targetEntity');
+      const micBtn = document.querySelector('#mic-btn');
+      const statusText = document.querySelector('#status-text');
+      const gui = document.querySelector('#gui');
+      const targetEntity = document.querySelector('#target');
 
-      // 1. 扫描状态监控
-      targetEntity.addEventListener("targetFound", () => {
-        uiPanel.style.display = 'block';
-        console.log("识别成功：显示模型和UI");
+      // 1. 初始化识别与合成
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'zh-CN';
+      recognition.continuous = false;
+
+      // 2. 扫描成功显示 UI
+      targetEntity.addEventListener("targetFound", () => { gui.style.display = 'block'; });
+      targetEntity.addEventListener("targetLost", () => { gui.style.display = 'none'; });
+
+      // 3. 按下说话逻辑
+      micBtn.addEventListener('touchstart', () => {
+        recognition.start();
+        micBtn.classList.add('active');
+        statusText.innerText = "正在听...";
       });
 
-      targetEntity.addEventListener("targetLost", () => {
-        uiPanel.style.display = 'none';
+      micBtn.addEventListener('touchend', () => {
+        recognition.stop();
+        micBtn.classList.remove('active');
       });
 
-      // 2. 语音互动 (利用浏览器自带的 TTS 引擎)
-      voiceBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const msg = new SpeechSynthesisUtterance("你好！我是你的AR助手，很高兴见到你。");
-        msg.lang = 'zh-CN';
-        msg.rate = 1.0; // 语速
-        window.speechSynthesis.speak(msg);
+      // 4. 听到说话后的处理
+      recognition.onresult = (event) => {
+        const userCommand = event.results[0][0].transcript;
+        statusText.innerText = "你说: " + userCommand;
+        processAIResponse(userCommand);
+      };
+
+      // 5. 对话大脑 (这里可以未来接入真正的 Gemini API)
+      function processAIResponse(text) {
+        let reply = "";
+        if (text.includes("你好")) {
+          reply = "你好！很高兴能通过增强现实技术与你见面。";
+        } else if (text.includes("跳个舞") || text.includes("动一下")) {
+          reply = "没问题，你看我跳得怎么样？";
+          character.setAttribute('animation-mixer', {clip: 'dance', repetitions: 1}); // 假设模型有dance动画
+        } else if (text.includes("你是谁")) {
+          reply = "我是你部署在 GitHub 上的 AR 助手。";
+        } else {
+          reply = "你说的“" + text + "”我听到了，但我还需要学习怎么回答。";
+        }
         
-        // 播放语音时模型变大一下
-        character.setAttribute('animation__bounce', 'property: scale; to: 2.2 2.2 2.2; dur: 200; dir: alternate; loop: 2');
-      });
+        speak(reply);
+      }
 
-      // 3. 触摸互动
-      character.addEventListener('click', () => {
-        // 改变动画 (如果模型有动画的话)
-        character.setAttribute('animation-mixer', {clip: '*', repetitions: 1});
-        alert("你触碰了 3D 人物！");
-      });
+      // 6. 播报回复
+      function speak(sentence) {
+        const utter = new SpeechSynthesisUtterance(sentence);
+        utter.lang = 'zh-CN';
+        
+        // 播放时停止旋转并看向镜头（可选）
+        character.removeAttribute('animation'); 
+        
+        window.speechSynthesis.speak(utter);
+
+        utter.onend = () => {
+          // 说话结束恢复匀速旋转
+          character.setAttribute('animation', "property: rotation; to: 0 360 0; dur: 15000; easing: linear; loop: true");
+        };
+      }
     </script>
   </body>
 </html>
