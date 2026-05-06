@@ -2,40 +2,45 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 交互 AR 平台</title>
+    <title>大健康数字化营销 AR 交互平台</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
 
     <style>
-      body { margin: 0; overflow: hidden; font-family: sans-serif; }
+      body { margin: 0; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
       .a-enter-vr { display: none; }
 
-      /* 对话 UI */
-      #gui {
-        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-        z-index: 1000; text-align: center; width: 80%; display: none;
+      /* UI 面板 */
+      #ar-gui {
+        position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+        z-index: 1000; text-align: center; width: 85%; display: none;
       }
-      #status-text {
-        color: white; background: rgba(0,0,0,0.6); padding: 5px 15px;
-        border-radius: 10px; margin-bottom: 10px; font-size: 14px;
+      #status-bubble {
+        color: #2d5a27; background: rgba(255, 255, 255, 0.95); 
+        padding: 12px 20px; border-radius: 15px; margin-bottom: 15px; 
+        font-size: 14px; border: 1px solid #7cb342;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
       }
       .mic-btn {
         width: 70px; height: 70px; border-radius: 50%; border: none;
-        background: #007AFF; color: white; font-size: 24px; cursor: pointer;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        background: linear-gradient(135deg, #8bc34a, #689f38); 
+        color: white; font-size: 28px; cursor: pointer;
+        box-shadow: 0 4px 20px rgba(104, 159, 56, 0.5);
+        display: flex; justify-content: center; align-items: center;
       }
-      .mic-btn.active { background: #FF3B30; animation: pulse 1.2s infinite; }
+      .mic-btn.active { background: #f44336; animation: pulse 1.5s infinite; }
       @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
     </style>
   </head>
   
   <body>
-    <div id="gui">
-      <div id="status-text">扫描成功！按住按钮跟我说话</div>
+    <div id="ar-gui">
+      <div id="status-bubble">识别成功！可点击人物或按住说话</div>
       <button id="mic-btn" class="mic-btn">🎤</button>
     </div>
 
+    <!-- cursor="rayOrigin: mouse" 是开启点击/触摸互动的关键 -->
     <a-scene 
       mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.1; missTolerance: 50" 
       color-space="sRGB" 
@@ -52,44 +57,71 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <a-entity id="target" mindar-image-target="targetIndex: 0">
+      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0">
+        <!-- 注意：添加了 clickable 类以供射线检测 -->
         <a-gltf-model 
           id="character"
           class="clickable"
           src="#avatarModel" 
           position="0 0 0" 
-          rotation="0 0 0" 
-          scale="1.5 1.5 1.5"
+          scale="1.2 1.2 1.2"
           animation-mixer="clip: *; loop: repeat"
-          animation="property: rotation; to: 0 360 0; dur: 15000; easing: linear; loop: true">
+          animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 12000; easing: linear; loop: true">
         </a-gltf-model>
       </a-entity>
 
-      <a-light type="ambient" intensity="1"></a-light>
+      <a-light type="ambient" intensity="1.0"></a-light>
+      <a-light type="directional" position="0 5 3" intensity="0.5"></a-light>
     </a-scene>
 
     <script>
       const character = document.querySelector('#character');
       const micBtn = document.querySelector('#mic-btn');
-      const statusText = document.querySelector('#status-text');
-      const gui = document.querySelector('#gui');
-      const targetEntity = document.querySelector('#target');
+      const statusText = document.querySelector('#status-bubble');
+      const guiPanel = document.querySelector('#ar-gui');
+      const targetAnchor = document.querySelector('#target-anchor');
 
-      // 1. 初始化识别与合成
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'zh-CN';
-      recognition.continuous = false;
+      const recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
+      if (recognition) { recognition.lang = 'zh-CN'; }
 
-      // 2. 扫描成功显示 UI
-      targetEntity.addEventListener("targetFound", () => { gui.style.display = 'block'; });
-      targetEntity.addEventListener("targetLost", () => { gui.style.display = 'none'; });
+      targetAnchor.addEventListener("targetFound", () => {
+        guiPanel.style.display = 'block';
+        speak("您好！我是您的数字化合伙人。您可以触摸我，也可以按住下方按钮说话。");
+      });
 
-      // 3. 按下说话逻辑
-      micBtn.addEventListener('touchstart', () => {
+      targetAnchor.addEventListener("targetLost", () => {
+        guiPanel.style.display = 'none';
+        window.speechSynthesis.cancel();
+      });
+
+      // --- 新增：触摸交互逻辑 ---
+      character.addEventListener('click', () => {
+        // 1. 视觉反馈：缩放动画
+        character.setAttribute('animation__scale', {
+          property: 'scale',
+          to: '1.4 1.4 1.4',
+          dur: 200,
+          dir: 'alternate',
+          loop: 2
+        });
+
+        // 2. 语音反馈：主动介绍业务
+        const touchReplies = [
+          "您好！我是您的数字化转型助手，正在为您展示大健康饮品的 AR 营销方案。",
+          "哎呀，您碰到我了！我是专注于为广西序元气等企业提供 AIGC 赋能的数字化合伙人。",
+          "触摸科技，感知未来。我们致力于让传统草木在数字时代焕发生机。"
+        ];
+        const randomReply = touchReplies[Math.floor(Math.random() * touchReplies.length)];
+        speak(randomReply);
+      });
+
+      // --- 原有：语音逻辑 ---
+      micBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
         recognition.start();
         micBtn.classList.add('active');
-        statusText.innerText = "正在听...";
+        statusText.innerText = "正在倾听...";
       });
 
       micBtn.addEventListener('touchend', () => {
@@ -97,43 +129,34 @@
         micBtn.classList.remove('active');
       });
 
-      // 4. 听到说话后的处理
       recognition.onresult = (event) => {
-        const userCommand = event.results[0][0].transcript;
-        statusText.innerText = "你说: " + userCommand;
-        processAIResponse(userCommand);
+        const text = event.results[0][0].transcript;
+        statusText.innerText = "您问: " + text;
+        processInquiry(text);
       };
 
-      // 5. 对话大脑 (这里可以未来接入真正的 Gemini API)
-      function processAIResponse(text) {
-        let reply = "";
-        if (text.includes("你好")) {
-          reply = "你好！很高兴能通过增强现实技术与你见面。";
-        } else if (text.includes("跳个舞") || text.includes("动一下")) {
-          reply = "没问题，你看我跳得怎么样？";
-          character.setAttribute('animation-mixer', {clip: 'dance', repetitions: 1}); // 假设模型有dance动画
-        } else if (text.includes("你是谁")) {
-          reply = "我是你部署在 GitHub 上的 AR 助手。";
+      function processInquiry(input) {
+        let response = "";
+        if (input.includes("好喝") || input.includes("推荐") || input.includes("怎么样")) {
+          response = "您可以试试我们的核心推荐。这款饮品专注于植物萃取，真正做到零糖、零脂、零防腐剂。";
+        } else if (input.includes("合作") || input.includes("联系")) {
+          response = "作为数字化转型合伙人，我们提供一站式服务，欢迎联系商务团队获取深度方案。";
+        } else if (input.includes("序元气")) {
+          response = "广西序元气是我们深度的数字化合作伙伴，我们正助力其在数字时代实现场景化跃迁。";
         } else {
-          reply = "你说的“" + text + "”我听到了，但我还需要学习怎么回答。";
+          response = "您说的话很有启发。您可以问我关于“产品推荐”或者“技术合作”。";
         }
-        
-        speak(reply);
+        speak(response);
       }
 
-      // 6. 播报回复
       function speak(sentence) {
-        const utter = new SpeechSynthesisUtterance(sentence);
-        utter.lang = 'zh-CN';
-        
-        // 播放时停止旋转并看向镜头（可选）
+        const msg = new SpeechSynthesisUtterance(sentence);
+        msg.lang = 'zh-CN';
         character.removeAttribute('animation'); 
-        
-        window.speechSynthesis.speak(utter);
-
-        utter.onend = () => {
-          // 说话结束恢复匀速旋转
-          character.setAttribute('animation', "property: rotation; to: 0 360 0; dur: 15000; easing: linear; loop: true");
+        window.speechSynthesis.speak(msg);
+        msg.onend = () => {
+          character.setAttribute('animation', "property: rotation; from: 0 0 0; to: 0 360 0; dur: 12000; easing: linear; loop: true");
+          statusText.innerText = "可点击人物或按住说话";
         };
       }
     </script>
