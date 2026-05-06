@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数字化营销 AR 互动平台</title>
+    <title>数字化营销 AR 互动平台 - 稳定版</title>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
@@ -14,17 +14,17 @@
       /* 底部按钮面板 */
       #menu-panel {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-        z-index: 1000; width: 90%; display: none; /* 识别后显示 */
+        z-index: 1000; width: 90%; display: none;
         flex-direction: column; gap: 10px;
       }
 
       .info-btn {
-        padding: 12px 20px; background: rgba(124, 179, 66, 0.9);
+        padding: 12px 20px; background: rgba(124, 179, 66, 0.95);
         color: white; border: 2px solid #ffffff; border-radius: 25px;
         font-weight: bold; cursor: pointer; font-size: 14px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        -webkit-tap-highlight-color: transparent;
       }
-      .info-btn:active { background: #558b2f; transform: scale(0.95); }
       
       #tips {
         color: white; font-size: 12px; text-shadow: 1px 1px 2px #000;
@@ -34,7 +34,6 @@
   </head>
   
   <body>
-    <!-- 交互按钮组 -->
     <div id="menu-panel">
       <div id="tips">—— 点击下方按钮了解我们 ——</div>
       <button class="info-btn" onclick="playIntro('intro')">🏢 团队定位介绍</button>
@@ -42,11 +41,18 @@
       <button class="info-btn" onclick="playIntro('cooperate')">🤝 合作赋能方案</button>
     </div>
 
+    <!-- 
+      稳定性优化参数说明：
+      filterMinCF: 0.0001 -> 极大地减少位置跳动（数值越小越稳）
+      filterBeta: 0.1 -> 增加平滑度，防止模型由于手抖产生的轻微震颤
+      missTolerance: 100 -> 允许识别丢失 100 帧（约 3 秒）后再移除模型，增加“粘性”
+      warmupTolerance: 10 -> 识别成功后需要 10 帧的确认时间，防止误报
+    -->
     <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.1; missTolerance: 50" 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 10; warmupTolerance: 10; missTolerance: 100" 
       color-space="sRGB" 
-      renderer="colorManagement: true, physicallyCorrectLights" 
-      vr-mode-ui="enabled: false"
+      renderer="colorManagement: true, physicallyCorrectLights, antialias: true" 
+      vr-mode-ui="enabled: false" 
       device-orientation-permission-ui="enabled: false"
       gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
       cursor="rayOrigin: mouse" 
@@ -78,59 +84,46 @@
       const targetEntity = document.querySelector('#target');
       const character = document.querySelector('#character');
 
-      // 1. 扫描识别监听
       targetEntity.addEventListener("targetFound", () => {
         menuPanel.style.display = 'flex';
       });
       targetEntity.addEventListener("targetLost", () => {
+        // 配合 missTolerance，模型会在图片离开视野一段时间后才消失，增加稳定性
         menuPanel.style.display = 'none';
         window.speechSynthesis.cancel();
       });
 
-      // 2. 自定义播报逻辑
       function playIntro(type) {
         let text = "";
-        
         switch(type) {
           case 'intro':
-            text = "我们是专注大健康饮品赛道的数字化营销赋能团队。基于 AIGC 与 AR 技术，为传统植物饮料企业（如广西序元气有限公司）提供从 AI 智能推荐、营销内容生成到 AR 互动包装的一站式解决方案，解决品牌老化、年轻用户触达难的问题。";
+            text = "我们是专注大健康饮品赛道的数字化营销赋能团队。基于 AIGC 与 AR 技术，为传统企业如广西序元气有限公司，提供一站式解决方案，解决品牌老化问题。";
             break;
           case 'product':
-            text = "您可以看看这款核心推荐。它专注于植物萃取，真正做到零糖、零脂、零防腐剂，口感清爽无负担。我们致力于让每一株传统草木在数字时代焕发新的生机。";
+            text = "这款产品专注于植物萃取，真正做到零糖、零脂、零防腐剂。我们致力于让每一株传统草木在数字时代焕发新的生机。";
             break;
           case 'cooperate':
-            text = "我们不仅是技术服务商，更是深耕大健康饮品赛道的数字化转型合伙人。我们提供从营销内容生成到 AR 包装的全链条方案，致力于提升商业价值。";
+            text = "我们不仅是技术服务商，更是深耕大健康饮品赛道的数字化转型合伙人。提供从内容生成到 AR 包装的全链条赋能方案。";
             break;
         }
-
         speak(text);
       }
 
-      // 3. 语音合成函数
       function speak(sentence) {
-        // 先停止当前播放
         window.speechSynthesis.cancel();
-        
         const utter = new SpeechSynthesisUtterance(sentence);
         utter.lang = 'zh-CN';
-        utter.rate = 1.0;
-
-        // 交互反馈：播报时人物放大一下
+        
+        // 说话时轻微放大反馈
         character.setAttribute('animation__scale', {
           property: 'scale',
-          to: '1.4 1.4 1.4',
-          dur: 300,
+          to: '1.3 1.3 1.3',
+          dur: 200,
           dir: 'alternate',
           loop: 2
         });
-
         window.speechSynthesis.speak(utter);
       }
-
-      // 4. 触摸人物也可以触发一次随机自我介绍
-      character.addEventListener('click', () => {
-        playIntro('intro');
-      });
     </script>
   </body>
 </html>
