@@ -1,26 +1,136 @@
-function processInquiry(input) {
-        let response = "";
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数字化营销 AR 互动平台</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
 
-        // 优化点：增加更多组合关键词，确保“说一下你们这个产品”能被识别
-        if (input.includes("产品") || input.includes("介绍") || input.includes("你们是") || input.includes("说一下") || input.includes("业务")) {
-          response = "我们是专注大健康饮品赛道的数字化营销赋能团队。基于 AIGC 与 AR 技术，为传统植物饮料企业（如广西序元气有限公司）提供从 AI 智能推荐、营销内容生成到 AR 互动包装的一站式解决方案，解决品牌老化和年轻用户触达难的问题。";
-        }
-        else if (input.includes("好喝") || input.includes("推荐") || input.includes("怎么样") || input.includes("特色")) {
-          response = "您可以试试我们的核心推荐。这款饮品专注于植物萃取，真正做到零糖、零脂、零防腐剂，口感清爽无负担。";
-        }
-        else if (input.includes("合作") || input.includes("联系") || input.includes("对接")) {
-          response = "作为数字化转型合伙人，我们提供从 AI 智能推荐到 AR 互动包装的一站式服务，欢迎联系商务团队获取深度方案。";
-        }
-        else if (input.includes("序元气")) {
-          response = "广西序元气是我们深度的数字化合作伙伴，我们正助力其在数字时代实现场景化跃迁，焕发新的商业价值。";
-        }
-        else if (input.includes("价值") || input.includes("优势") || input.includes("合伙人")) {
-          response = "我们不仅是技术服务商，更是深耕大健康赛道的数字化转型合伙人，致力于让传统品牌在数字时代焕发新生。";
-        }
-        else {
-          // 兜底回答也稍微改得自然一点
-          response = "您说的话很有启发。您可以问我‘你们的产品是什么’，或者‘有什么好喝的推荐’。";
-        }
+    <style>
+      body { margin: 0; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
+      .a-enter-vr { display: none; }
 
-        speak(response);
+      /* 底部按钮面板 */
+      #menu-panel {
+        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+        z-index: 1000; width: 90%; display: none; /* 识别后显示 */
+        flex-direction: column; gap: 10px;
       }
+
+      .info-btn {
+        padding: 12px 20px; background: rgba(124, 179, 66, 0.9);
+        color: white; border: 2px solid #ffffff; border-radius: 25px;
+        font-weight: bold; cursor: pointer; font-size: 14px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      }
+      .info-btn:active { background: #558b2f; transform: scale(0.95); }
+      
+      #tips {
+        color: white; font-size: 12px; text-shadow: 1px 1px 2px #000;
+        margin-bottom: 5px; text-align: center;
+      }
+    </style>
+  </head>
+  
+  <body>
+    <!-- 交互按钮组 -->
+    <div id="menu-panel">
+      <div id="tips">—— 点击下方按钮了解我们 ——</div>
+      <button class="info-btn" onclick="playIntro('intro')">🏢 团队定位介绍</button>
+      <button class="info-btn" onclick="playIntro('product')">🍃 产品核心卖点</button>
+      <button class="info-btn" onclick="playIntro('cooperate')">🤝 合作赋能方案</button>
+    </div>
+
+    <a-scene 
+      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.1; missTolerance: 50" 
+      color-space="sRGB" 
+      renderer="colorManagement: true, physicallyCorrectLights" 
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+      gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
+      cursor="rayOrigin: mouse" 
+      raycaster="objects: .clickable">
+
+      <a-assets>
+        <a-asset-item id="avatarModel" src="./my_model.glb"></a-asset-item>
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <a-entity id="target" mindar-image-target="targetIndex: 0">
+        <a-gltf-model 
+          id="character"
+          class="clickable"
+          src="#avatarModel" 
+          position="0 0 0" 
+          scale="1.2 1.2 1.2"
+          animation-mixer="clip: *; loop: repeat"
+          animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 12000; easing: linear; loop: true">
+        </a-gltf-model>
+      </a-entity>
+
+      <a-light type="ambient" intensity="1.2"></a-light>
+    </a-scene>
+
+    <script>
+      const menuPanel = document.querySelector('#menu-panel');
+      const targetEntity = document.querySelector('#target');
+      const character = document.querySelector('#character');
+
+      // 1. 扫描识别监听
+      targetEntity.addEventListener("targetFound", () => {
+        menuPanel.style.display = 'flex';
+      });
+      targetEntity.addEventListener("targetLost", () => {
+        menuPanel.style.display = 'none';
+        window.speechSynthesis.cancel();
+      });
+
+      // 2. 自定义播报逻辑
+      function playIntro(type) {
+        let text = "";
+        
+        switch(type) {
+          case 'intro':
+            text = "我们是专注大健康饮品赛道的数字化营销赋能团队。基于 AIGC 与 AR 技术，为传统植物饮料企业（如广西序元气有限公司）提供从 AI 智能推荐、营销内容生成到 AR 互动包装的一站式解决方案，解决品牌老化、年轻用户触达难的问题。";
+            break;
+          case 'product':
+            text = "您可以看看这款核心推荐。它专注于植物萃取，真正做到零糖、零脂、零防腐剂，口感清爽无负担。我们致力于让每一株传统草木在数字时代焕发新的生机。";
+            break;
+          case 'cooperate':
+            text = "我们不仅是技术服务商，更是深耕大健康饮品赛道的数字化转型合伙人。我们提供从营销内容生成到 AR 包装的全链条方案，致力于提升商业价值。";
+            break;
+        }
+
+        speak(text);
+      }
+
+      // 3. 语音合成函数
+      function speak(sentence) {
+        // 先停止当前播放
+        window.speechSynthesis.cancel();
+        
+        const utter = new SpeechSynthesisUtterance(sentence);
+        utter.lang = 'zh-CN';
+        utter.rate = 1.0;
+
+        // 交互反馈：播报时人物放大一下
+        character.setAttribute('animation__scale', {
+          property: 'scale',
+          to: '1.4 1.4 1.4',
+          dur: 300,
+          dir: 'alternate',
+          loop: 2
+        });
+
+        window.speechSynthesis.speak(utter);
+      }
+
+      // 4. 触摸人物也可以触发一次随机自我介绍
+      character.addEventListener('click', () => {
+        playIntro('intro');
+      });
+    </script>
+  </body>
+</html>
