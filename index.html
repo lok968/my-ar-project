@@ -1,164 +1,26 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>大健康数字化营销 AR 交互平台</title>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
-
-    <style>
-      body { margin: 0; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
-      .a-enter-vr { display: none; }
-
-      /* UI 面板 */
-      #ar-gui {
-        position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-        z-index: 1000; text-align: center; width: 85%; display: none;
-      }
-      #status-bubble {
-        color: #2d5a27; background: rgba(255, 255, 255, 0.95); 
-        padding: 12px 20px; border-radius: 15px; margin-bottom: 15px; 
-        font-size: 14px; border: 1px solid #7cb342;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-      }
-      .mic-btn {
-        width: 70px; height: 70px; border-radius: 50%; border: none;
-        background: linear-gradient(135deg, #8bc34a, #689f38); 
-        color: white; font-size: 28px; cursor: pointer;
-        box-shadow: 0 4px 20px rgba(104, 159, 56, 0.5);
-        display: flex; justify-content: center; align-items: center;
-      }
-      .mic-btn.active { background: #f44336; animation: pulse 1.5s infinite; }
-      @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-    </style>
-  </head>
-  
-  <body>
-    <div id="ar-gui">
-      <div id="status-bubble">识别成功！可点击人物或按住说话</div>
-      <button id="mic-btn" class="mic-btn">🎤</button>
-    </div>
-
-    <!-- cursor="rayOrigin: mouse" 是开启点击/触摸互动的关键 -->
-    <a-scene 
-      mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.1; missTolerance: 50" 
-      color-space="sRGB" 
-      renderer="colorManagement: true, physicallyCorrectLights" 
-      vr-mode-ui="enabled: false"
-      device-orientation-permission-ui="enabled: false"
-      gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
-      cursor="rayOrigin: mouse" 
-      raycaster="objects: .clickable">
-
-      <a-assets>
-        <a-asset-item id="avatarModel" src="./my_model.glb"></a-asset-item>
-      </a-assets>
-
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
-      <a-entity id="target-anchor" mindar-image-target="targetIndex: 0">
-        <!-- 注意：添加了 clickable 类以供射线检测 -->
-        <a-gltf-model 
-          id="character"
-          class="clickable"
-          src="#avatarModel" 
-          position="0 0 0" 
-          scale="1.2 1.2 1.2"
-          animation-mixer="clip: *; loop: repeat"
-          animation="property: rotation; from: 0 0 0; to: 0 360 0; dur: 12000; easing: linear; loop: true">
-        </a-gltf-model>
-      </a-entity>
-
-      <a-light type="ambient" intensity="1.0"></a-light>
-      <a-light type="directional" position="0 5 3" intensity="0.5"></a-light>
-    </a-scene>
-
-    <script>
-      const character = document.querySelector('#character');
-      const micBtn = document.querySelector('#mic-btn');
-      const statusText = document.querySelector('#status-bubble');
-      const guiPanel = document.querySelector('#ar-gui');
-      const targetAnchor = document.querySelector('#target-anchor');
-
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = (SpeechRecognition) ? new SpeechRecognition() : null;
-      if (recognition) { recognition.lang = 'zh-CN'; }
-
-      targetAnchor.addEventListener("targetFound", () => {
-        guiPanel.style.display = 'block';
-        speak("您好！我是您的数字化合伙人。您可以触摸我，也可以按住下方按钮说话。");
-      });
-
-      targetAnchor.addEventListener("targetLost", () => {
-        guiPanel.style.display = 'none';
-        window.speechSynthesis.cancel();
-      });
-
-      // --- 新增：触摸交互逻辑 ---
-      character.addEventListener('click', () => {
-        // 1. 视觉反馈：缩放动画
-        character.setAttribute('animation__scale', {
-          property: 'scale',
-          to: '1.4 1.4 1.4',
-          dur: 200,
-          dir: 'alternate',
-          loop: 2
-        });
-
-        // 2. 语音反馈：主动介绍业务
-        const touchReplies = [
-          "您好！我是您的数字化转型助手，正在为您展示大健康饮品的 AR 营销方案。",
-          "哎呀，您碰到我了！我是专注于为广西序元气等企业提供 AIGC 赋能的数字化合伙人。",
-          "触摸科技，感知未来。我们致力于让传统草木在数字时代焕发生机。"
-        ];
-        const randomReply = touchReplies[Math.floor(Math.random() * touchReplies.length)];
-        speak(randomReply);
-      });
-
-      // --- 原有：语音逻辑 ---
-      micBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        recognition.start();
-        micBtn.classList.add('active');
-        statusText.innerText = "正在倾听...";
-      });
-
-      micBtn.addEventListener('touchend', () => {
-        recognition.stop();
-        micBtn.classList.remove('active');
-      });
-
-      recognition.onresult = (event) => {
-        const text = event.results[0][0].transcript;
-        statusText.innerText = "您问: " + text;
-        processInquiry(text);
-      };
-
-      function processInquiry(input) {
+function processInquiry(input) {
         let response = "";
-        if (input.includes("好喝") || input.includes("推荐") || input.includes("怎么样")) {
-          response = "您可以试试我们的核心推荐。这款饮品专注于植物萃取，真正做到零糖、零脂、零防腐剂。";
-        } else if (input.includes("合作") || input.includes("联系")) {
-          response = "作为数字化转型合伙人，我们提供一站式服务，欢迎联系商务团队获取深度方案。";
-        } else if (input.includes("序元气")) {
-          response = "广西序元气是我们深度的数字化合作伙伴，我们正助力其在数字时代实现场景化跃迁。";
-        } else {
-          response = "您说的话很有启发。您可以问我关于“产品推荐”或者“技术合作”。";
+
+        // 优化点：增加更多组合关键词，确保“说一下你们这个产品”能被识别
+        if (input.includes("产品") || input.includes("介绍") || input.includes("你们是") || input.includes("说一下") || input.includes("业务")) {
+          response = "我们是专注大健康饮品赛道的数字化营销赋能团队。基于 AIGC 与 AR 技术，为传统植物饮料企业（如广西序元气有限公司）提供从 AI 智能推荐、营销内容生成到 AR 互动包装的一站式解决方案，解决品牌老化和年轻用户触达难的问题。";
         }
+        else if (input.includes("好喝") || input.includes("推荐") || input.includes("怎么样") || input.includes("特色")) {
+          response = "您可以试试我们的核心推荐。这款饮品专注于植物萃取，真正做到零糖、零脂、零防腐剂，口感清爽无负担。";
+        }
+        else if (input.includes("合作") || input.includes("联系") || input.includes("对接")) {
+          response = "作为数字化转型合伙人，我们提供从 AI 智能推荐到 AR 互动包装的一站式服务，欢迎联系商务团队获取深度方案。";
+        }
+        else if (input.includes("序元气")) {
+          response = "广西序元气是我们深度的数字化合作伙伴，我们正助力其在数字时代实现场景化跃迁，焕发新的商业价值。";
+        }
+        else if (input.includes("价值") || input.includes("优势") || input.includes("合伙人")) {
+          response = "我们不仅是技术服务商，更是深耕大健康赛道的数字化转型合伙人，致力于让传统品牌在数字时代焕发新生。";
+        }
+        else {
+          // 兜底回答也稍微改得自然一点
+          response = "您说的话很有启发。您可以问我‘你们的产品是什么’，或者‘有什么好喝的推荐’。";
+        }
+
         speak(response);
       }
-
-      function speak(sentence) {
-        const msg = new SpeechSynthesisUtterance(sentence);
-        msg.lang = 'zh-CN';
-        character.removeAttribute('animation'); 
-        window.speechSynthesis.speak(msg);
-        msg.onend = () => {
-          character.setAttribute('animation', "property: rotation; from: 0 0 0; to: 0 360 0; dur: 12000; easing: linear; loop: true");
-          statusText.innerText = "可点击人物或按住说话";
-        };
-      }
-    </script>
-  </body>
-</html>
